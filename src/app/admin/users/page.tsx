@@ -9,7 +9,7 @@ interface U { _id: string; name: string; email: string; role: string; interests:
 interface Group { interest: string; count: number; }
 
 export default function AdminUsersPage() {
-  const { token, user } = useAuth();
+  const { token, user, ready } = useAuth();
   const router = useRouter();
   const [users, setUsers] = useState<U[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -27,10 +27,11 @@ export default function AdminUsersPage() {
   }, [page]);
 
   useEffect(() => {
+    if (!ready) return;
     if (!token) { router.replace("/login"); return; }
     if (user && user.role !== "admin") { router.replace("/notes"); return; }
     load();
-  }, [token, user, load, router]);
+  }, [ready, token, user, load, router]);
 
   async function remove(id: string) {
     await api.delete(`/users/${id}`);

@@ -4,8 +4,11 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 
 export default function Home() {
-  const { token } = useAuth();
+  const { token, ready } = useAuth();
   const router = useRouter();
-  useEffect(() => { router.replace(token ? "/notes" : "/login"); }, [token, router]);
+  useEffect(() => {
+    if (!ready) return;
+    router.replace(token ? "/notes" : "/login");
+  }, [ready, token, router]);
   return null;
 }

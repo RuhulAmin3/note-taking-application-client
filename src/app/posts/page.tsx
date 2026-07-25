@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 interface Post { _id: string; title: string; content: string; author: { name: string; email: string }; }
 
 export default function PostsPage() {
-  const { token, user } = useAuth();
+  const { token, user, ready } = useAuth();
   const router = useRouter();
   const [posts, setPosts] = useState<Post[]>([]);
   const [form, setForm] = useState({ title: "", content: "" });
@@ -21,9 +21,10 @@ export default function PostsPage() {
   }, [user]);
 
   useEffect(() => {
+    if (!ready) return;
     if (!token) { router.replace("/login"); return; }
     load();
-  }, [token, load, router]);
+  }, [ready, token, load, router]);
 
   async function create(e: React.FormEvent) {
     e.preventDefault();

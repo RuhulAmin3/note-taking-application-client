@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 interface Note { _id: string; title: string; content: string; }
 
 export default function NotesPage() {
-  const { token, user, logout } = useAuth();
+  const { token, user, ready, logout } = useAuth();
   const router = useRouter();
   const [notes, setNotes] = useState<Note[]>([]);
   const [meta, setMeta] = useState({ page: 1, totalPages: 1 });
@@ -23,9 +23,10 @@ export default function NotesPage() {
   }, [page]);
 
   useEffect(() => {
+    if (!ready) return;
     if (!token) { router.replace("/login"); return; }
     load();
-  }, [token, load, router]);
+  }, [ready, token, load, router]);
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
