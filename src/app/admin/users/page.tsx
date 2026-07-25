@@ -35,7 +35,8 @@ export default function AdminUsersPage() {
 
   async function remove(id: string) {
     await api.delete(`/users/${id}`);
-    load();
+    if (users.length === 1 && page > 1) setPage((p) => p - 1);
+    else load();
   }
 
   return (
@@ -51,7 +52,11 @@ export default function AdminUsersPage() {
             <tr key={u._id} className="border-b">
               <td className="p-2">{u.name}</td><td className="p-2">{u.email}</td>
               <td className="p-2">{u.role}</td><td className="p-2">{u.interests?.join(", ")}</td>
-              <td className="p-2"><Button size="sm" variant="destructive" onClick={() => remove(u._id)}>Delete</Button></td>
+              <td className="p-2">
+                {u._id !== user?.id && (
+                  <Button size="sm" variant="destructive" onClick={() => remove(u._id)}>Delete</Button>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

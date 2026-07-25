@@ -15,6 +15,7 @@ export default function NotesPage() {
   const [meta, setMeta] = useState({ page: 1, totalPages: 1 });
   const [form, setForm] = useState({ title: "", content: "" });
   const [page, setPage] = useState(1);
+  const [err, setErr] = useState("");
 
   const load = useCallback(async () => {
     const { data } = await api.get(`/notes?page=${page}&limit=5`);
@@ -30,13 +31,25 @@ export default function NotesPage() {
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
-    await api.post("/notes", form);
-    setForm({ title: "", content: "" });
-    load();
+    setErr("");
+    try {
+      await api.post("/notes", form);
+      setForm({ title: "", content: "" });
+      load();
+    } catch {
+      setErr("Failed to add note");
+    }
   }
   async function remove(id: string) {
-    await api.delete(`/notes/${id}`);
-    load();
+    setErr("");
+    try {
+      await api.delete(`/notes/${id}`);
+      // stepping back a page avoids stranding the user on a now-empty page
+      if (notes.length === 1 && page > 1) setPage((p) => p - 1);
+      else load();
+    } catch {
+      setErr("Failed to delete note");
+    }
   }
 
   return (
@@ -52,6 +65,7 @@ export default function NotesPage() {
         <Input placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
         <Input placeholder="Content" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} />
         <Button type="submit">Add note</Button>
+        {err && <p className="text-red-500 text-sm">{err}</p>}
       </form>
       <ul className="flex flex-col gap-2">
         {notes.map((n) => (

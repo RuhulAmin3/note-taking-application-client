@@ -13,6 +13,7 @@ export default function PostsPage() {
   const router = useRouter();
   const [posts, setPosts] = useState<Post[]>([]);
   const [form, setForm] = useState({ title: "", content: "" });
+  const [err, setErr] = useState("");
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -28,9 +29,14 @@ export default function PostsPage() {
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
-    await api.post("/posts", form);
-    setForm({ title: "", content: "" });
-    load();
+    setErr("");
+    try {
+      await api.post("/posts", form);
+      setForm({ title: "", content: "" });
+      load();
+    } catch {
+      setErr("Failed to add post");
+    }
   }
 
   return (
@@ -40,6 +46,7 @@ export default function PostsPage() {
         <Input placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
         <Input placeholder="Content" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} />
         <Button type="submit">Add post</Button>
+        {err && <p className="text-red-500 text-sm">{err}</p>}
       </form>
       <ul className="flex flex-col gap-2">
         {posts.map((p) => (
