@@ -1,73 +1,260 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+
+import { useCallback, useEffect, useState } from "react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { readApiError } from "@/lib/errors";
+import { AppShell } from "@/components/app-shell";
+import { ConfirmDelete } from "@/components/confirm-delete";
+import { FormError } from "@/components/field";
+import { Pager } from "@/components/pager";
+import { UserForm, type Role, type UserValues } from "@/components/user-form";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
-interface U { _id: string; name: string; email: string; role: string; interests: string[]; }
-interface Group { interest: string; count: number; }
+interface AdminUser {
+  _id: string;
+  name: string;
+  email: string;
+  role: Role;
+  interests: string[];
+}
+
+interface InterestGroup {
+  interest: string;
+  count: number;
+}
+
+const PAGE_SIZE = 10;
+
+function toInterests(value: string) {
+  return value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
 export default function AdminUsersPage() {
   const { token, user, ready } = useAuth();
-  const router = useRouter();
-  const [users, setUsers] = useState<U[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [groups, setGroups] = useState<InterestGroup[]>([]);
+  const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
   const [page, setPage] = useState(1);
-  const [meta, setMeta] = useState({ page: 1, totalPages: 1 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<AdminUser | null>(null);
 
   const load = useCallback(async () => {
-    const [u, g] = await Promise.all([
-      api.get(`/users?page=${page}&limit=10`),
-      api.get(`/users/grouped-by-interests`),
-    ]);
-    setUsers(u.data.data);
-    setMeta(u.data.meta);
-    setGroups(g.data.groups);
+    try {
+      const [list, grouped] = await Promise.all([
+        api.get(`/users?page=${page}&limit=${PAGE_SIZE}`),
+        api.get(`/users/grouped-by-interests`),
+      ]);
+      setError("");
+      setUsers(list.data.data);
+      setMeta(list.data.meta);
+      setGroups(grouped.data.groups);
+    } catch (err) {
+      const { message } = readApiError(err, "Could not load users.");
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
   }, [page]);
 
   useEffect(() => {
-    if (!ready) return;
-    if (!token) { router.replace("/login"); return; }
-    if (user && user.role !== "admin") { router.replace("/notes"); return; }
+    if (!ready || !token || user?.role !== "admin") return;
+    // load() awaits the requests before it touches state, so nothing is set
+    // synchronously here; the rule cannot see past the await.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
-  }, [ready, token, user, load, router]);
+  }, [ready, token, user, load]);
+
+  async function create(values: UserValues) {
+    await api.post("/users", {
+      name: values.name,
+      email: values.email,
+      password: values.password,
+      role: values.role,
+      interests: toInterests(values.interests),
+    });
+    await load();
+  }
+
+  async function update(id: string, values: UserValues) {
+    // The server rejects a password on update, so it is never sent here.
+    await api.patch(`/users/${id}`, {
+      name: values.name,
+      email: values.email,
+      role: values.role,
+      interests: toInterests(values.interests),
+    });
+    await load();
+  }
 
   async function remove(id: string) {
-    await api.delete(`/users/${id}`);
-    if (users.length === 1 && page > 1) setPage((p) => p - 1);
-    else load();
+    try {
+      await api.delete(`/users/${id}`);
+      if (users.length === 1 && page > 1) setPage((p) => p - 1);
+      else await load();
+    } catch (err) {
+      const { message } = readApiError(err, "Could not delete the user.");
+      setError(message);
+    }
   }
 
   return (
-    <div className="max-w-3xl mx-auto mt-10 flex flex-col gap-4">
-      <div className="flex justify-between">
-        <h1 className="text-xl font-bold">Admin — Users</h1>
-        <Button variant="outline" onClick={() => router.push("/notes")}>Back</Button>
-      </div>
-      <table className="w-full border">
-        <thead><tr className="border-b"><th className="text-left p-2">Name</th><th className="text-left p-2">Email</th><th className="text-left p-2">Role</th><th className="text-left p-2">Interests</th><th></th></tr></thead>
-        <tbody>
-          {users.map((u) => (
-            <tr key={u._id} className="border-b">
-              <td className="p-2">{u.name}</td><td className="p-2">{u.email}</td>
-              <td className="p-2">{u.role}</td><td className="p-2">{u.interests?.join(", ")}</td>
-              <td className="p-2">
-                {u._id !== user?.id && (
-                  <Button size="sm" variant="destructive" onClick={() => remove(u._id)}>Delete</Button>
+    <AppShell
+      title="Users"
+      description="Everyone with an account, and what they said they're into."
+      requireAdmin
+      action={
+        <Button onClick={() => setCreating(true)}>
+          <Plus data-icon="inline-start" />
+          Add user
+        </Button>
+      }
+    >
+      <div className="space-y-6">
+        {error && <FormError message={error} />}
+
+        {loading ? (
+          <Skeleton className="h-64 w-full" />
+        ) : (
+          <>
+            <Card className="py-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Interests</TableHead>
+                    <TableHead className="w-0" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {users.map((u) => (
+                    <TableRow key={u._id}>
+                      <TableCell className="font-medium">{u.name}</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {u.email}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={u.role === "admin" ? "default" : "secondary"}>
+                          {u.role}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {u.interests?.length ? u.interests.join(", ") : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Edit ${u.name}`}
+                            onClick={() => setEditing(u)}
+                          >
+                            <Pencil />
+                          </Button>
+                          {/* The server refuses self-deletion; don't offer it. */}
+                          {u._id !== user?.id && (
+                            <ConfirmDelete
+                              title="Delete this user?"
+                              description={`${u.name} (${u.email}) will lose access immediately.`}
+                              confirmLabel="Delete user"
+                              onConfirm={() => remove(u._id)}
+                            >
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label={`Delete ${u.name}`}
+                              >
+                                <Trash2 />
+                              </Button>
+                            </ConfirmDelete>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+
+            <Pager
+              page={meta.page}
+              totalPages={meta.totalPages}
+              total={meta.total}
+              unit="users"
+              onChange={setPage}
+            />
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Interests</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {groups.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No one has listed an interest yet.
+                  </p>
+                ) : (
+                  <ul className="divide-y">
+                    {groups.map((g) => (
+                      <li
+                        key={g.interest}
+                        className="flex items-center justify-between py-2 text-sm first:pt-0 last:pb-0"
+                      >
+                        <span>{g.interest}</span>
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {g.count} {g.count === 1 ? "person" : "people"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="flex gap-2 items-center">
-        <Button size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</Button>
-        <span>Page {meta.page} / {meta.totalPages}</span>
-        <Button size="sm" disabled={page >= meta.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
-      <h2 className="text-lg font-bold mt-4">Users grouped by interest</h2>
-      <ul>{groups.map((g) => <li key={g.interest}>{g.interest}: {g.count}</li>)}</ul>
-    </div>
+
+      {creating && (
+        <UserForm
+          open
+          onOpenChange={(open) => !open && setCreating(false)}
+          onSave={create}
+        />
+      )}
+
+      {editing && (
+        <UserForm
+          key={editing._id}
+          open
+          onOpenChange={(open) => !open && setEditing(null)}
+          initial={{
+            name: editing.name,
+            email: editing.email,
+            role: editing.role,
+            interests: editing.interests?.join(", ") ?? "",
+          }}
+          onSave={(values) => update(editing._id, values)}
+        />
+      )}
+    </AppShell>
   );
 }
