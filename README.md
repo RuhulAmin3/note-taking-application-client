@@ -2,6 +2,11 @@
 
 Next.js 16 (App Router) + React 19 + TypeScript + Tailwind v4 + shadcn/ui client for the [note-taking API](https://github.com/RuhulAmin3/note-taking-application-server). JWT auth held in `localStorage`, role-aware routing for `user` and `admin`, light and dark themes.
 
+**Live:** https://note-application-client-six.vercel.app
+**API:** https://note-application-server.vercel.app ([repo](https://github.com/RuhulAmin3/note-taking-application-server))
+
+Sign up for a regular account, or sign in as `admin@test.com` / `adminpass123` to see the admin views.
+
 ## Features
 
 **Everyone**
@@ -44,6 +49,20 @@ Seed an admin from the backend repo with `npm run seed`, then sign in as `admin@
 | `npm run build` | Production build |
 | `npm run start` | Serve the production build |
 | `npm run lint` | ESLint |
+
+## Deploy (Vercel)
+
+```bash
+vercel link
+vercel env add NEXT_PUBLIC_API_URL production   # https://<your-api>.vercel.app/api
+vercel --prod
+```
+
+Set `NEXT_PUBLIC_API_URL` **before the first build**. `NEXT_PUBLIC_*` values are inlined into the bundle at build time, so changing it in the dashboard afterwards does nothing until you redeploy — and a build that ran without it ships pointing at `localhost`.
+
+The API's `CORS_ORIGIN` has to name this app's deployed origin, so the order is: deploy the API, deploy this against it, then set `CORS_ORIGIN` on the API and redeploy it. Only the production aliases are allowlisted — preview deployments get a different URL and their API calls will be blocked by the browser.
+
+To confirm a build picked up the right API URL, grep the served bundle for `localhost`; there should be no matches.
 
 ## Structure
 
