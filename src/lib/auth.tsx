@@ -19,6 +19,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
+  // localStorage cannot be read while rendering on the server, so the stored
+  // session is picked up after mount. `ready` keeps consumers from acting on
+  // the signed-out state during that first pass.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const t = localStorage.getItem("token");
     const u = localStorage.getItem("user");
@@ -26,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (u) setUser(JSON.parse(u));
     setReady(true);
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   function persist(t: string, u: User) {
     localStorage.setItem("token", t);
